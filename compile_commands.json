@@ -1,0 +1,22 @@
+[
+  {
+    "file": "toml_parse.c",
+    "arguments": [
+      "/usr/bin/cc",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Wpedantic",
+      "-Werror",
+      "-g",
+      "-O0",
+      "-DDEBUG",
+      "-c",
+      "-o",
+      "obj/toml_parse.o",
+      "toml_parse.c"
+    ],
+    "directory": "/Users/adan/zig/toml_c",
+    "output": "obj/toml_parse.o"
+  }
+]

@@ -1,0 +1,80 @@
+BasedOnStyle: LLVM
+Language: Cpp
+
+Standard: c++03
+
+# --- Indentation ---
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+IndentCaseLabels: true
+IndentGotoLabels: true
+IndentPPDirectives: AfterHash
+
+# --- Braces ---
+BreakBeforeBraces: Attach
+AllowShortBlocksOnASingleLine: Never
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortEnumsOnASingleLine: false
+
+# --- Alignment ---
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveDeclarations: false
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignTrailingComments: true
+AlignEscapedNewlines: Right
+AlignOperands: true
+AlignAfterOpenBracket: Align
+
+# --- Pointers / references ---
+PointerAlignment: Right
+DerivePointerAlignment: false
+
+# --- Line length / breaking ---
+ColumnLimit: 80
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeTernaryOperators: true
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+
+# --- Spacing ---
+SpaceBeforeParens: ControlStatements
+SpaceAfterCStyleCast: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceBeforeAssignmentOperators: true
+SpaceAroundPointerQualifiers: Default
+BitFieldColonSpacing: Both
+
+# --- Includes ---
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+# --- Comments ---
+ReflowComments: false
+CommentPragmas: "^[^ ]"
+
+# --- Macros ---
+ForEachMacros:
+  - "TOML_TABLE_FOREACH"
+  - "TOML_ARRAY_FOREACH"
+  - "TOML_ARRAY_ENUMERATE"
+  - "TOML_TABLE_ENUMERATE"
+  - "TOML_FOREACH_PTR"
+  - "TOML_ENUMERATE_PTR"
+
+# --- Misc ---
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+FixNamespaceComments: false
+SortUsingDeclarations: false
+Cpp11BracedListStyle: false

@@ -1,0 +1,65 @@
+#define TOML_IMPLEMENTATION
+#include "toml.h"
+#undef TOML_IMPLEMENTATION
+
+#define TOML_TEST_IMPLEMENTATION
+#include "test_toml.h"
+#undef TOML_TEST_IMPLEMENTATION
+
+#define ARENA_IMPLEMENTATION
+#include "arena.h"
+#undef ARENA_IMPLEMENTATION
+
+#include <stdio.h>
+#include <string.h>
+
+// ---------------------------------------------------------------------------
+// Usage
+// ---------------------------------------------------------------------------
+
+static void print_usage(const char *prog) {
+    printf("Usage: %s (--test | <file.toml>)\n"
+           "\n"
+           "  --test         Parse the built-in test document and run checks.\n"
+           "  <file.toml>    Parse a TOML file and dump its tree.\n"
+           "  -h, --help     Show this help message.\n",
+           prog);
+}
+
+// ---------------------------------------------------------------------------
+// main
+// ---------------------------------------------------------------------------
+
+int main(int argc, char *argv[]) {
+    if (argc == 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
+        print_usage(argv[0]);
+        return 0;
+    }
+
+    if (argc == 2 && !strcmp(argv[1], "--test")) {
+        return run_toml_tests();
+    }
+
+    if (argc != 2) {
+        fprintf(stderr, "error: expected exactly one argument\n\n");
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    const char *path = argv[1];
+    printf("=== toml_parse: loading \"%s\" ===\n\n", path);
+
+    toml_result_t result = toml_parse(TOML_FROM_PATH(path));
+    if (!result.ok) {
+        fprintf(stderr, "Parse failed: %s\n", result.errmsg);
+        return 1;
+    }
+
+    printf("--- Full tree dump ---\n");
+    printf("root = ");
+    toml_print_node(result.root, 0);
+    putchar('\n');
+
+    toml_free(result);
+    return 0;
+}

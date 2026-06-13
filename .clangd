@@ -1,0 +1,13 @@
+CompileFlags:
+  CompilationDatabase: .
+  Add:
+    - -ferror-limit=0
+
+Diagnostics:
+  UnusedIncludes: Strict
+
+Index:
+  Background: Build
+
+SemanticTokens:
+  DisabledKinds: [InactiveCode]
