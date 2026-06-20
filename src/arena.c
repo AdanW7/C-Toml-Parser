@@ -1,70 +1,12 @@
-// Usage:
-//   Arena a = {0};
-//   char *s = arena_strdup(&a, "hello");
-//   void *p = arena_alloc(&a, 128);
-//   arena_reset(&a);   // reuse memory, keep chunks
-//   arena_free(&a);    // release everything
+#include "arena.h"
 
-#ifndef ARENA_H_
-#define ARENA_H_
-
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
-#ifndef ARENA_ASSERT
-#    include <assert.h>
-#    define ARENA_ASSERT assert
+#ifndef ARENA_MALLOC
+#    include <stdlib.h>
+#    define ARENA_MALLOC malloc
+#    define ARENA_FREE   free
 #endif
 
-#ifndef ARENA_DEFAULT_CAPACITY
-#    define ARENA_DEFAULT_CAPACITY (8 * 1024)
-#endif
-
-typedef struct Arena_Chunk Arena_Chunk;
-
-struct Arena_Chunk {
-    Arena_Chunk *next;
-    size_t capacity;
-    size_t used;
-    unsigned char data[];
-};
-
-typedef struct {
-    Arena_Chunk *begin;
-    Arena_Chunk *end;
-} Arena;
-
-typedef struct {
-    Arena_Chunk *chunk;
-    size_t used;
-} Arena_Mark;
-
-void *arena_alloc(Arena *a, size_t size);
-void *arena_realloc(Arena *a, void *oldptr, size_t oldsz, size_t newsz);
-
-char *arena_strdup(Arena *a, const char *cstr);
-char *arena_strndup(Arena *a, const char *str, size_t len);
-void *arena_memdup(Arena *a, const void *data, size_t size);
-
-Arena_Mark arena_snapshot(Arena *a);
-void arena_rewind(Arena *a, Arena_Mark m);
-void arena_reset(Arena *a);
-void arena_free(Arena *a);
-
-#endif // ARENA_H_
-
-#ifdef ARENA_IMPLEMENTATION
-#ifndef ARENA_IMPLEMENTATION_DONE
-#    define ARENA_IMPLEMENTATION_DONE
-
-#    ifndef ARENA_MALLOC
-#        include <stdlib.h>
-#        define ARENA_MALLOC malloc
-#        define ARENA_FREE   free
-#    endif
-
-#    define ARENA_ALIGN (sizeof(void *) * 2)
+#define ARENA_ALIGN (sizeof(void *) * 2)
 
 static size_t arena_align_up(size_t n) {
     return (n + (ARENA_ALIGN - 1)) & ~(ARENA_ALIGN - 1);
@@ -169,6 +111,3 @@ void arena_free(Arena *a) {
     a->begin = NULL;
     a->end   = NULL;
 }
-
-#endif // ARENA_IMPLEMENTATION_DONE
-#endif // ARENA_IMPLEMENTATION

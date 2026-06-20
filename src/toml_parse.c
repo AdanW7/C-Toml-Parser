@@ -1,6 +1,7 @@
-#define TOML_IMPLEMENTATION
 #include "toml.h"
-#undef TOML_IMPLEMENTATION
+#include "test_toml.h"
+#include <stdio.h>
+#include <string.h>
 
 #if defined(_WIN32) && !defined(__GLIBC__)
 static void *tmx_memmem(const void *haystack, size_t haystack_len,
@@ -16,15 +17,8 @@ static void *tmx_memmem(const void *haystack, size_t haystack_len,
     }
     return NULL;
 }
-#define memmem tmx_memmem
+#    define memmem tmx_memmem
 #endif
-
-#define TOML_TEST_IMPLEMENTATION
-#include "test_toml.h"
-#undef TOML_TEST_IMPLEMENTATION
-
-#include <stdio.h>
-#include <string.h>
 
 // ---------------------------------------------------------------------------
 // Usage

@@ -35,8 +35,10 @@ BIN_DIR = bin
 OBJ_DIR = obj
 
 TARGET  = $(BIN_DIR)/toml_parse$(EXE_EXT)
-SRCS    = toml_parse.c
-OBJS    = $(SRCS:%.c=$(OBJ_DIR)/%.o)
+SRCS    = $(wildcard src/*.c)
+CFLAGS += -Iinclude
+OBJS    = $(SRCS:src/%.c=$(OBJ_DIR)/%.o)
+
 
 SAN_FLAGS = -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer \
             -fno-optimize-sibling-calls
@@ -56,7 +58,8 @@ san: $(TARGET)
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 
-$(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
+
+$(OBJ_DIR)/%.o: src/%.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BIN_DIR) $(OBJ_DIR):

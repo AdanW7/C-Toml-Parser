@@ -1,20 +1,8 @@
-#ifndef TEST_TOML_H_
-#define TEST_TOML_H_
-
 #include "toml.h"
-
-void toml_print_node(toml_node_t n, int depth);
-int run_toml_tests(void);
-
-#endif /*TEST_TOML_H_*/
-
-#ifdef TOML_TEST_IMPLEMENTATION
-#ifndef TOML_TEST_IMPLEMENTATION_DONE
-#    define TOML_TEST_IMPLEMENTATION_DONE
-
-#    include <inttypes.h>
-#    include <stdio.h>
-#    include <string.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
 
 static void toml_print_indent(int depth) {
     for (int i = 0; i < depth * 2; i++)
@@ -282,15 +270,15 @@ const char *toml_test_string =
 
 static int check_failed = 0;
 
-#    define CHECK(label, cond)                                                 \
-        do {                                                                   \
-            if (!(cond)) {                                                     \
-                fprintf(stderr, "  FAIL: %s\n", label);                        \
-                check_failed++;                                                \
-            } else {                                                           \
-                printf("  PASS: %s\n", label);                                 \
-            }                                                                  \
-        } while (0)
+#define CHECK(label, cond)                                                     \
+    do {                                                                       \
+        if (!(cond)) {                                                         \
+            fprintf(stderr, "  FAIL: %s\n", label);                            \
+            check_failed++;                                                    \
+        } else {                                                               \
+            printf("  PASS: %s\n", label);                                     \
+        }                                                                      \
+    } while (0)
 
 static void run_checks(toml_result_t *r) {
     printf("\n--- Targeted value checks ---\n");
@@ -1098,6 +1086,4 @@ int run_toml_tests(void) {
     return check_failed ? 1 : 0;
 }
 
-#    undef CHECK
-#endif // TOML_TEST_IMPLEMENTATION_DONE
-#endif // TOML_TEST_IMPLEMENTATION
+#undef CHECK
