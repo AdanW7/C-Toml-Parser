@@ -6,6 +6,20 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifdef TOML_IMPLEMENTATION
+#    ifndef ARENA_IMPLEMENTATION_DONE
+#        ifndef ARENA_IMPLEMENTATION
+#            define TOML_DEFINED_ARENA_IMPLEMENTATION
+#            define ARENA_IMPLEMENTATION
+#        endif
+#    endif
+#    include "arena.h"
+#    ifdef TOML_DEFINED_ARENA_IMPLEMENTATION
+#        undef ARENA_IMPLEMENTATION
+#        undef TOML_DEFINED_ARENA_IMPLEMENTATION
+#    endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -258,7 +272,7 @@ bool toml_equiv(const toml_result_t *self, const toml_result_t *other);
                         TOML_ARRAY_ITEM((node), 0), TOML_ARRAY_LEN(node))
 
 /* ---------------------------------------------------------------------------
- * Convenience macros for Printing macros 
+ * Convenience macros for Printing macros
  * -------------------------------------------------------------------------*/
 #define TOML_DATE_FMT        "%04d-%02d-%02d"
 #define TOML_TIME_FMT        "%02d:%02d:%02d.%06d"
@@ -329,23 +343,53 @@ static int parse_std_table(toml_parser_t *parser, toml_token_t token);
 static int parse_array_table(toml_parser_t *parser, toml_token_t token);
 
 /* ---------------------------------------------------------------------------
- * Allocator
+ * Arena-backed allocation
  * -------------------------------------------------------------------------*/
-static toml_alloc_t toml_allocator = { realloc, free };
+typedef struct toml_alloc_hdr_t {
+    size_t size;
+} toml_alloc_hdr_t;
 
-#    define TOML_ALLOC(n)      toml_allocator.realloc(NULL, (n))
-#    define TOML_REALLOC(p, n) toml_allocator.realloc((p), (n))
-#    define TOML_FREE(p)       toml_allocator.free(p)
+static Arena toml_fallback_arena = { 0 };
+static Arena *toml_active_arena  = &toml_fallback_arena;
+
+static Arena *toml_set_active_arena(Arena *arena) {
+    Arena *old        = toml_active_arena;
+    toml_active_arena = arena ? arena : &toml_fallback_arena;
+    return old;
+}
+
+static void *toml_arena_alloc(size_t size) {
+    if (size == 0) size = 1;
+    toml_alloc_hdr_t *hdr =
+        (toml_alloc_hdr_t *)arena_alloc(toml_active_arena,
+                                        sizeof(toml_alloc_hdr_t) + size);
+    if (!hdr) return NULL;
+    hdr->size = size;
+    return hdr + 1;
+}
+
+static void *toml_arena_realloc(void *ptr, size_t size) {
+    if (!ptr) return toml_arena_alloc(size);
+    if (size == 0) size = 1;
+    toml_alloc_hdr_t *old = ((toml_alloc_hdr_t *)ptr) - 1;
+    void *next            = toml_arena_alloc(size);
+    if (!next) return NULL;
+    memcpy(next, ptr, old->size < size ? old->size : size);
+    return next;
+}
+
+static void toml_arena_free(void *ptr) { (void)ptr; }
+
+#    define TOML_ALLOC(n)      toml_arena_alloc((n))
+#    define TOML_REALLOC(p, n) toml_arena_realloc((p), (n))
+#    define TOML_FREE(p)       toml_arena_free((p))
 
 toml_alloc_t toml_default_alloc(void) {
-    return (toml_alloc_t){
-        .realloc = realloc,
-        .free    = free,
-    };
+    return (toml_alloc_t){ 0 };
 }
 
 void toml_set_alloc(toml_alloc_t allocactor) {
-    toml_allocator = allocactor;
+    (void)allocactor;
 }
 
 typedef toml_node_t *toml_node_ptr_t; /* may be NULL  */
@@ -371,78 +415,40 @@ static int errbuf_set(char_slice_s err_buf, int line, const char *fmt, ...) {
 }
 #    undef PTR_AVAIL
 
-/* ---------------------------------------------------------------------------
-     * Memory pool
-     * -------------------------------------------------------------------------*/
-#    define POOL_BLOCK_MIN 256
-typedef struct toml_pool_block_t {
-    struct toml_pool_block_t *next;
-    size_t cap;
-    size_t top;
-    char buf[];
-} toml_pool_block_t;
-
 typedef struct toml_pool_t {
-    toml_pool_block_t *head;
+    Arena arena;
+    size_t used;
 } toml_pool_t;
 
-static toml_pool_block_t *pool_block_create(size_t capacity) {
-    if (capacity < POOL_BLOCK_MIN) capacity = POOL_BLOCK_MIN;
-    toml_pool_block_t *blk = TOML_ALLOC(sizeof(*blk) + capacity);
-    if (!blk) return NULL;
-    *blk = (toml_pool_block_t){
-        .cap = capacity,
-    };
-    return blk;
-}
-
 static toml_pool_t *pool_create(size_t initial) {
-    toml_pool_t *pool = TOML_ALLOC(sizeof(*pool));
+    (void)initial;
+    Arena arena       = { 0 };
+    toml_pool_t *pool = (toml_pool_t *)arena_alloc(&arena, sizeof(*pool));
     if (!pool) return NULL;
-    pool->head = pool_block_create(initial);
-    if (!pool->head) {
-        TOML_FREE(pool);
-        return NULL;
-    }
+    *pool = (toml_pool_t){ .arena = arena };
     return pool;
 }
 
 static void pool_destroy(toml_pool_t *pool) {
     if (!pool) return;
-    toml_pool_block_t *blk = pool->head;
-    while (blk) {
-        toml_pool_block_t *next = blk->next;
-        TOML_FREE(blk);
-        blk = next;
-    }
-    TOML_FREE(pool);
+    Arena arena = pool->arena;
+    arena_free(&arena);
 }
 
 static size_t pool_total_used(toml_pool_t *pool) {
-    size_t total = 0;
-    for (toml_pool_block_t *b = pool->head; b; b = b->next)
-        total += b->top;
-    return total;
+    return pool ? pool->used : 0;
 }
 
 static char *pool_alloc(toml_pool_t *pool, size_t n) {
-    toml_pool_block_t *blk = pool->head;
-    if (!blk || blk->top + n > blk->cap) {
-        size_t newsz = blk ? blk->cap * 2 : POOL_BLOCK_MIN;
-        if (newsz < n) newsz = n;
-        toml_pool_block_t *nb = pool_block_create(newsz);
-        if (!nb) return NULL;
-        nb->next   = pool->head;
-        pool->head = nb;
-        blk        = nb;
-    }
-    char *ret = blk->buf + blk->top;
-    blk->top += n;
+    if (!pool) return NULL;
+    char *ret = (char *)arena_alloc(&pool->arena, n ? n : 1);
+    if (!ret) return NULL;
+    pool->used += n;
     return ret;
 }
 
 /* ---------------------------------------------------------------------------
- * Growable cell 
+ * Growable cell
  * -------------------------------------------------------------------------*/
 typedef struct cell_hdr_t {
     uint32_t cap;
@@ -2674,6 +2680,7 @@ static toml_result_t toml_parse_span_version(char_span_s input,
         snprintf(result.errmsg, sizeof(result.errmsg), "out of memory");
         return result;
     }
+    Arena *old_arena = toml_set_active_arena(&parser.pool->arena);
 
     lexer_init(&parser.lexer, input.ptr, input.len, parser.errbuff.ptr,
                parser.errbuff.len, version);
@@ -2704,11 +2711,13 @@ static toml_result_t toml_parse_span_version(char_span_s input,
     result.ok        = true;
     result.root      = parser.root;
     result._internal = parser.pool;
+    toml_set_active_arena(old_arena);
     return result;
 
 cleanup:
     node_free(&parser.root);
     pool_destroy(parser.pool);
+    toml_set_active_arena(old_arena);
     result.ok = false;
     if (!result.errmsg[0])
         snprintf(result.errmsg, sizeof(result.errmsg),
@@ -2733,6 +2742,8 @@ static toml_result_t toml_parse_file_version(FILE *fp, e_toml_version version) {
     char *buf = NULL;
     int top   = 0;
     bool err  = false;
+    Arena file_arena = { 0 };
+    Arena *old_arena = toml_set_active_arena(&file_arena);
 
     {
         long cur = ftell(fp);
@@ -2776,12 +2787,16 @@ static toml_result_t toml_parse_file_version(FILE *fp, e_toml_version version) {
 
     if (err) {
         cell_free(buf);
+        toml_set_active_arena(old_arena);
+        arena_free(&file_arena);
         return result;
     }
     buf[top] = '\0';
     result   = toml_parse_span_version((char_span_s){ .ptr = buf, .len = top },
                                        version);
     cell_free(buf);
+    toml_set_active_arena(old_arena);
+    arena_free(&file_arena);
     return result;
 }
 
@@ -2844,7 +2859,8 @@ toml_node_t toml_seek(toml_node_t tab, const char *dotted_key) {
     if (tab.type != eTomlTable) return NODE_ZERO;
 
     int klen  = (int)strlen(dotted_key) + 1;
-    char *buf = TOML_ALLOC(klen);
+    Arena scratch = { 0 };
+    char *buf = (char *)arena_alloc(&scratch, (size_t)klen);
     if (!buf) return NODE_ZERO;
     memcpy(buf, dotted_key, klen);
 
@@ -2898,7 +2914,7 @@ toml_node_t toml_seek(toml_node_t tab, const char *dotted_key) {
         }
     }
 
-    TOML_FREE(buf);
+    arena_free(&scratch);
     return cur;
 }
 
@@ -2907,6 +2923,7 @@ toml_result_t toml_merge(const toml_result_t *self,
     const char *reason = "";
     toml_result_t ret  = { 0 };
     toml_pool_t *pool  = NULL;
+    Arena *old_arena   = NULL;
 
     if (!self->ok) {
         reason = "param error: first result not ok";
@@ -2929,14 +2946,18 @@ toml_result_t toml_merge(const toml_result_t *self,
         }
     }
 
+    old_arena = toml_set_active_arena(&pool->arena);
     if (node_copy(&ret.root, self->root, pool, &reason)) goto cleanup;
     if (node_merge(&ret.root, other->root, pool, &reason)) goto cleanup;
+    toml_set_active_arena(old_arena);
+    old_arena = NULL;
 
     ret.ok        = true;
     ret._internal = pool;
     return ret;
 
 cleanup:
+    if (old_arena) toml_set_active_arena(old_arena);
     pool_destroy(pool);
     snprintf(ret.errmsg, sizeof(ret.errmsg), "%s", reason);
     return ret;
@@ -3014,11 +3035,14 @@ toml_result_t toml_clone(const toml_result_t *src) {
         return ret;
     }
     const char *reason;
+    Arena *old_arena = toml_set_active_arena(&pool->arena);
     if (node_copy(&ret.root, src->root, pool, &reason)) {
+        toml_set_active_arena(old_arena);
         pool_destroy(pool);
         snprintf(ret.errmsg, sizeof(ret.errmsg), "%s", reason);
         return ret;
     }
+    toml_set_active_arena(old_arena);
     ret.ok        = true;
     ret._internal = pool;
     return ret;

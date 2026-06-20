@@ -2,13 +2,26 @@
 #include "toml.h"
 #undef TOML_IMPLEMENTATION
 
+#if defined(_WIN32) && !defined(__GLIBC__)
+static void *tmx_memmem(const void *haystack, size_t haystack_len,
+                        const void *needle, size_t needle_len) {
+    if (needle_len == 0) return (void *)haystack;
+    if (needle_len > haystack_len) return NULL;
+    const unsigned char *h = (const unsigned char *)haystack;
+    const unsigned char *n = (const unsigned char *)needle;
+    for (size_t i = 0; i <= haystack_len - needle_len; i++) {
+        if (h[i] == n[0] && memcmp(h + i, n, needle_len) == 0) {
+            return (void *)(h + i);
+        }
+    }
+    return NULL;
+}
+#define memmem tmx_memmem
+#endif
+
 #define TOML_TEST_IMPLEMENTATION
 #include "test_toml.h"
 #undef TOML_TEST_IMPLEMENTATION
-
-#define ARENA_IMPLEMENTATION
-#include "arena.h"
-#undef ARENA_IMPLEMENTATION
 
 #include <stdio.h>
 #include <string.h>
